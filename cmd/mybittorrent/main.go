@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -116,6 +118,15 @@ type Info struct {
 	Pieces      []byte `json:"pieces"`
 }
 
+func (i Info) Hash() (string, error) {
+	bytes, err := json.Marshal(i)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling info: %w", err)
+	}
+
+	return hex.EncodeToString(sha1.New().Sum(bytes)), nil
+}
+
 type TorrentFile struct {
 	Announce string `json:"Tracker URL"`
 	Info     Info   `json:"info"`
@@ -187,6 +198,14 @@ func main() {
 
 		fmt.Println("Tracker URL:", torrentFile.Announce)
 		fmt.Println("Length:", torrentFile.Info.Length)
+
+		infoHash, err := torrentFile.Info.Hash()
+		if err != nil {
+			fmt.Println("Error calculating info hash:", err)
+			return
+		}
+
+		fmt.Println("Info Hash:", infoHash)
 	default:
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
