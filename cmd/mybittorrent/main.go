@@ -8,9 +8,17 @@ import (
 	"unicode"
 )
 
-func decodeBenCodeString(bencodedString string) (string, error) {
-	var firstColonIndex int
+func getFirstColonIndex(bencodedString string) int {
+	for i := 0; i < len(bencodedString); i++ {
+		if bencodedString[i] == ':' {
+			return i
+		}
+	}
 
+	return -1
+}
+
+func decodeBenCodeString(firstColonIndex int, bencodedString string) (string, error) {
 	for i := 0; i < len(bencodedString); i++ {
 		if bencodedString[i] == ':' {
 			firstColonIndex = i
@@ -32,13 +40,58 @@ func decodeBencodeInt(bencodedString string) (int, error) {
 	return strconv.Atoi(bencodedString[1 : len(bencodedString)-1])
 }
 
+func lastIndexInteger(start int, bencodedString string) int {
+	for i := start; i < len(bencodedString); i++ {
+		if bencodedString[i] == 'e' {
+			return i
+		}
+	}
+
+	return -1
+}
+
+func decodeBencodeList(bencodedString string) ([]interface{}, error) {
+	pointer := 1
+	decodedList := make([]interface{}, 0)
+
+	for pointer < len(bencodedString) {
+		if unicode.IsDigit(rune(bencodedString[0])) {
+			firstColonIndex := getFirstColonIndex(bencodedString)
+			decodedString, err := decodeBenCodeString(firstColonIndex, bencodedString)
+			if err != nil {
+				return nil, err
+			}
+
+			decodedList = append(decodedList, decodedString)
+
+			pointer += len(decodedString) + 1
+		} else if bencodedString[pointer] == 'i' {
+			lastIndexInteger := lastIndexInteger(pointer, bencodedString)
+			decodedInt, err := decodeBencodeInt(bencodedString[pointer : lastIndexInteger+1])
+			if err != nil {
+				return nil, err
+			}
+
+			decodedList = append(decodedList, decodedInt)
+			pointer = lastIndexInteger + 1
+		}
+	}
+
+	return decodedList, nil
+}
+
 func decodeBencode(bencodedString string) (interface{}, error) {
 	if unicode.IsDigit(rune(bencodedString[0])) {
-		return decodeBenCodeString(bencodedString)
+		firstColonIndex := getFirstColonIndex(bencodedString)
+		return decodeBenCodeString(firstColonIndex, bencodedString)
 	}
 
 	if bencodedString[0] == 'i' && bencodedString[len(bencodedString)-1] == 'e' {
 		return decodeBencodeInt(bencodedString)
+	}
+
+	if bencodedString[0] == 'l' && bencodedString[len(bencodedString)-1] == 'e' {
+		return decodeBencodeList(bencodedString[1 : len(bencodedString)-1])
 	}
 
 	return "", fmt.Errorf("only strings are supported at the moment")
