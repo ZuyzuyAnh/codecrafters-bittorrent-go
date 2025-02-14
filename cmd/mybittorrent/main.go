@@ -44,7 +44,7 @@ func lastIndexInteger(start int, bencodedString string) int {
 }
 
 func decodeBencodeList(bencodedString string) ([]interface{}, error) {
-	pointer := 1
+	pointer := 0
 	decodedList := make([]interface{}, 0)
 
 	for pointer < len(bencodedString) {
