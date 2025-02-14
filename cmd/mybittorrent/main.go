@@ -73,7 +73,7 @@ func decodeBencodeList(bencodedString string) ([]interface{}, error) {
 			}
 
 			decodedList = append(decodedList, decodedInt)
-			pointer = lastIndexInteger + 1
+			pointer += lastIndexInteger + 1
 		}
 	}
 
