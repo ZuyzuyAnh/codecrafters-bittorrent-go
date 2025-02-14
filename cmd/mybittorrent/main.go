@@ -19,13 +19,6 @@ func getFirstColonIndex(bencodedString string) int {
 }
 
 func decodeBenCodeString(firstColonIndex int, bencodedString string) (string, error) {
-	for i := 0; i < len(bencodedString); i++ {
-		if bencodedString[i] == ':' {
-			firstColonIndex = i
-			break
-		}
-	}
-
 	lengthStr := bencodedString[:firstColonIndex]
 
 	length, err := strconv.Atoi(lengthStr)
