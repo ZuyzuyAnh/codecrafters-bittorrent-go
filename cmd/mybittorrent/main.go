@@ -48,25 +48,25 @@ func decodeBencodeList(bencodedString string) ([]interface{}, error) {
 	decodedList := make([]interface{}, 0)
 
 	for pointer < len(bencodedString) {
-		if unicode.IsDigit(rune(bencodedString[0])) {
-			firstColonIndex := getFirstColonIndex(bencodedString)
-			decodedString, err := decodeBenCodeString(firstColonIndex, bencodedString)
+		if unicode.IsDigit(rune(bencodedString[pointer])) {
+			firstColonIndex := getFirstColonIndex(bencodedString[pointer:])
+			decodedString, err := decodeBenCodeString(firstColonIndex, bencodedString[pointer:])
 			if err != nil {
 				return nil, err
 			}
 
 			decodedList = append(decodedList, decodedString)
 
-			pointer += len(decodedString) + 1
+			pointer += firstColonIndex + 1 + len(decodedString)
 		} else if bencodedString[pointer] == 'i' {
-			lastIndexInteger := lastIndexInteger(pointer, bencodedString)
-			decodedInt, err := decodeBencodeInt(bencodedString[pointer : lastIndexInteger+1])
+			lastIndex := lastIndexInteger(pointer, bencodedString)
+			decodedInt, err := decodeBencodeInt(bencodedString[pointer : lastIndex+1])
 			if err != nil {
 				return nil, err
 			}
 
 			decodedList = append(decodedList, decodedInt)
-			pointer += lastIndexInteger + 1
+			pointer = lastIndex + 1
 		}
 	}
 
