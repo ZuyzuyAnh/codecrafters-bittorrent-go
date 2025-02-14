@@ -48,29 +48,60 @@ func decodeBencodeList(bencodedString string) ([]interface{}, error) {
 	decodedList := make([]interface{}, 0)
 
 	for pointer < len(bencodedString) {
-		if unicode.IsDigit(rune(bencodedString[pointer])) {
-			firstColonIndex := getFirstColonIndex(bencodedString[pointer:])
-			decodedString, err := decodeBenCodeString(firstColonIndex, bencodedString[pointer:])
-			if err != nil {
-				return nil, err
-			}
-
-			decodedList = append(decodedList, decodedString)
-
-			pointer = firstColonIndex + len(decodedString) + 1
-		} else if bencodedString[pointer] == 'i' {
+		switch bencodedString[pointer] {
+		case 'i':
 			lastIndex := lastIndexInteger(pointer, bencodedString)
 			decodedInt, err := decodeBencodeInt(bencodedString[pointer : lastIndex+1])
 			if err != nil {
 				return nil, err
 			}
-
 			decodedList = append(decodedList, decodedInt)
 			pointer = lastIndex + 1
+
+		case 'l':
+			subList, err := decodeBencodeList(bencodedString[pointer+1:])
+			if err != nil {
+				return nil, err
+			}
+			decodedList = append(decodedList, subList)
+
+			closeIndex := findClosingIndex(pointer, bencodedString)
+			pointer = closeIndex + 1
+
+		case 'e':
+			return decodedList, nil
+
+		default:
+			if unicode.IsDigit(rune(bencodedString[pointer])) {
+				firstColonIndex := getFirstColonIndex(bencodedString[pointer:])
+				decodedString, err := decodeBenCodeString(firstColonIndex, bencodedString[pointer:])
+				if err != nil {
+					return nil, err
+				}
+				decodedList = append(decodedList, decodedString)
+				pointer += firstColonIndex + len(decodedString) + 1
+			} else {
+				return nil, fmt.Errorf("invalid bencode format")
+			}
 		}
 	}
 
 	return decodedList, nil
+}
+
+func findClosingIndex(start int, bencodedString string) int {
+	level := 0
+	for i := start; i < len(bencodedString); i++ {
+		if bencodedString[i] == 'l' {
+			level++
+		} else if bencodedString[i] == 'e' {
+			level--
+			if level == 0 {
+				return i
+			}
+		}
+	}
+	return len(bencodedString) - 1
 }
 
 func decodeBencode(bencodedString string) (interface{}, error) {
