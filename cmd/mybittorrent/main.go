@@ -29,8 +29,16 @@ func decodeBenCodeString(bencodedString string) (string, int, error) {
 }
 
 func decodeBencodeInt(bencodedString string) (int, int, error) {
-	val, err := strconv.Atoi(bencodedString[1 : len(bencodedString)-1])
-	return val, len(bencodedString), err
+	var closingIndex int
+	for i := 1; i < len(bencodedString); i++ {
+		if bencodedString[i] == 'e' {
+			closingIndex = i
+			break
+		}
+	}
+
+	val, err := strconv.Atoi(bencodedString[1:closingIndex])
+	return val, closingIndex + 1, err
 }
 
 func decodeBencodeList(bencodedString string) ([]interface{}, int, error) {
