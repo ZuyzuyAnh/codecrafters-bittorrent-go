@@ -8,17 +8,16 @@ import (
 	"unicode"
 )
 
-func getFirstColonIndex(bencodedString string) int {
+func decodeBenCodeString(bencodedString string) (string, error) {
+	var firstColonIndex int
+
 	for i := 0; i < len(bencodedString); i++ {
 		if bencodedString[i] == ':' {
-			return i
+			firstColonIndex = i
+			break
 		}
 	}
 
-	return -1
-}
-
-func decodeBenCodeString(firstColonIndex int, bencodedString string) (string, error) {
 	lengthStr := bencodedString[:firstColonIndex]
 
 	length, err := strconv.Atoi(lengthStr)
@@ -33,49 +32,25 @@ func decodeBencodeInt(bencodedString string) (int, error) {
 	return strconv.Atoi(bencodedString[1 : len(bencodedString)-1])
 }
 
-func lastIndexInteger(start int, bencodedString string) int {
-	for i := start; i < len(bencodedString); i++ {
-		if bencodedString[i] == 'e' {
-			return i
-		}
-	}
-
-	return -1
-}
-
 func decodeBencodeList(bencodedString string) ([]interface{}, error) {
 	pointer := 0
 	decodedList := make([]interface{}, 0)
 
-	for pointer < len(bencodedString) {
-		if unicode.IsDigit(rune(bencodedString[pointer])) {
-			firstColonIndex := getFirstColonIndex(bencodedString[pointer:])
-			decodedString, err := decodeBenCodeString(firstColonIndex, bencodedString[pointer:])
-			if err != nil {
-				return nil, err
-			}
-
-			decodedList = append(decodedList, decodedString)
-
-			pointer += firstColonIndex + len(decodedString) + 1
-		} else if bencodedString[pointer] == 'i' {
-			lastIndex := lastIndexInteger(pointer, bencodedString)
-			decodedInt, err := decodeBencodeInt(bencodedString[pointer : lastIndex+1])
-			if err != nil {
-				return nil, err
-			}
-
-			decodedList = append(decodedList, decodedInt)
-			pointer = lastIndex + 1
-		} else {
-			subList, err := decodeBencodeList(bencodedString[pointer+1 : len(bencodedString)-1])
-			if err != nil {
-				return nil, err
-			}
-
-			decodedList = append(decodedList, subList)
+	for {
+		if pointer >= len(bencodedString) {
 			break
 		}
+
+		if bencodedString[pointer] == 'e' {
+			break
+		}
+
+		decoded, err := decodeBencode(bencodedString[pointer:])
+		if err != nil {
+			return nil, err
+		}
+
+		decodedList = append(decodedList, decoded)
 	}
 
 	return decodedList, nil
@@ -83,8 +58,7 @@ func decodeBencodeList(bencodedString string) ([]interface{}, error) {
 
 func decodeBencode(bencodedString string) (interface{}, error) {
 	if unicode.IsDigit(rune(bencodedString[0])) {
-		firstColonIndex := getFirstColonIndex(bencodedString)
-		return decodeBenCodeString(firstColonIndex, bencodedString)
+		return decodeBenCodeString(bencodedString)
 	}
 
 	if bencodedString[0] == 'i' && bencodedString[len(bencodedString)-1] == 'e' {
