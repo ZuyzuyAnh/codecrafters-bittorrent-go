@@ -24,8 +24,8 @@ func decodeBenCodeString(bencodedString string) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-
-	return bencodedString[firstColonIndex+1 : firstColonIndex+1+length], len(bencodedString), nil
+	consumed := firstColonIndex + 1 + length
+	return bencodedString[firstColonIndex+1 : consumed], consumed, nil
 }
 
 func decodeBencodeInt(bencodedString string) (int, int, error) {
