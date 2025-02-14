@@ -56,14 +56,19 @@ func decodeBencodeList(bencodedString string) ([]interface{}, error) {
 			}
 
 			decodedList = append(decodedList, decodedString)
+			fmt.Println(decodedString)
 
-			pointer = firstColonIndex + len(decodedString)
+			pointer = firstColonIndex + len(decodedString) + 1
+			fmt.Println(pointer)
 		} else if bencodedString[pointer] == 'i' {
+			fmt.Println("found i")
 			lastIndex := lastIndexInteger(pointer, bencodedString)
 			decodedInt, err := decodeBencodeInt(bencodedString[pointer : lastIndex+1])
 			if err != nil {
 				return nil, err
 			}
+
+			fmt.Println(decodedInt)
 
 			decodedList = append(decodedList, decodedInt)
 			pointer = lastIndex + 1
