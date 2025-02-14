@@ -42,29 +42,27 @@ func decodeBencodeInt(bencodedString string) (int, int, error) {
 }
 
 func decodeBencodeList(bencodedString string) ([]interface{}, int, error) {
-	pointer := 0
+	if bencodedString[0] != 'l' {
+		return nil, 0, fmt.Errorf("expected list to start with 'l'")
+	}
+	pointer := 1 // bắt đầu sau 'l'
 	decodedList := make([]interface{}, 0)
 
-	for {
-		if pointer >= len(bencodedString) {
-			break
-		}
-
+	for pointer < len(bencodedString) {
 		if bencodedString[pointer] == 'e' {
+			pointer++
 			break
 		}
 
-		decoded, decodedLength, err := decodeBencode(bencodedString[pointer:])
+		decoded, consumed, err := decodeBencode(bencodedString[pointer:])
 		if err != nil {
 			return nil, 0, err
 		}
-
-		pointer += decodedLength
-
 		decodedList = append(decodedList, decoded)
+		pointer += consumed
 	}
 
-	return decodedList, len(bencodedString), nil
+	return decodedList, pointer, nil
 }
 
 func decodeBencode(bencodedString string) (interface{}, int, error) {
@@ -76,8 +74,8 @@ func decodeBencode(bencodedString string) (interface{}, int, error) {
 		return decodeBencodeInt(bencodedString)
 	}
 
-	if bencodedString[0] == 'l' && bencodedString[len(bencodedString)-1] == 'e' {
-		return decodeBencodeList(bencodedString[1 : len(bencodedString)-1])
+	if bencodedString[0] == 'l' {
+		return decodeBencodeList(bencodedString)
 	}
 
 	return "", 0, fmt.Errorf("only strings are supported at the moment")
