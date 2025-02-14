@@ -8,7 +8,7 @@ import (
 	"unicode"
 )
 
-func decodeBenCodeString(bencodedString string) (string, error) {
+func decodeBenCodeString(bencodedString string) (string, int, error) {
 	var firstColonIndex int
 
 	for i := 0; i < len(bencodedString); i++ {
@@ -22,17 +22,18 @@ func decodeBenCodeString(bencodedString string) (string, error) {
 
 	length, err := strconv.Atoi(lengthStr)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
-	return bencodedString[firstColonIndex+1 : firstColonIndex+1+length], nil
+	return bencodedString[firstColonIndex+1 : firstColonIndex+1+length], len(bencodedString), nil
 }
 
-func decodeBencodeInt(bencodedString string) (int, error) {
-	return strconv.Atoi(bencodedString[1 : len(bencodedString)-1])
+func decodeBencodeInt(bencodedString string) (int, int, error) {
+	val, err := strconv.Atoi(bencodedString[1 : len(bencodedString)-1])
+	return val, len(bencodedString), err
 }
 
-func decodeBencodeList(bencodedString string) ([]interface{}, error) {
+func decodeBencodeList(bencodedString string) ([]interface{}, int, error) {
 	pointer := 0
 	decodedList := make([]interface{}, 0)
 
@@ -45,18 +46,20 @@ func decodeBencodeList(bencodedString string) ([]interface{}, error) {
 			break
 		}
 
-		decoded, err := decodeBencode(bencodedString[pointer:])
+		decoded, decodedLength, err := decodeBencode(bencodedString[pointer:])
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
+
+		pointer += decodedLength
 
 		decodedList = append(decodedList, decoded)
 	}
 
-	return decodedList, nil
+	return decodedList, len(bencodedString), nil
 }
 
-func decodeBencode(bencodedString string) (interface{}, error) {
+func decodeBencode(bencodedString string) (interface{}, int, error) {
 	if unicode.IsDigit(rune(bencodedString[0])) {
 		return decodeBenCodeString(bencodedString)
 	}
@@ -69,7 +72,7 @@ func decodeBencode(bencodedString string) (interface{}, error) {
 		return decodeBencodeList(bencodedString[1 : len(bencodedString)-1])
 	}
 
-	return "", fmt.Errorf("only strings are supported at the moment")
+	return "", 0, fmt.Errorf("only strings are supported at the moment")
 }
 
 func main() {
@@ -80,7 +83,7 @@ func main() {
 	if command == "decode" {
 		bencodedValue := os.Args[2]
 
-		decoded, err := decodeBencode(bencodedValue)
+		decoded, _, err := decodeBencode(bencodedValue)
 		if err != nil {
 			fmt.Println(err)
 			return
