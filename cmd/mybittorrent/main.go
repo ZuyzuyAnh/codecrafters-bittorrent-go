@@ -68,8 +68,6 @@ func decodeBencodeList(bencodedString string) ([]interface{}, error) {
 			decodedList = append(decodedList, decodedInt)
 			pointer = lastIndex + 1
 		} else {
-			fmt.Printf("pointer: %d, current string: %s, current list: %v\n", pointer, bencodedString[pointer:], decodedList)
-
 			subList, err := decodeBencodeList(bencodedString[pointer+1 : len(bencodedString)-1])
 			if err != nil {
 				return nil, err
