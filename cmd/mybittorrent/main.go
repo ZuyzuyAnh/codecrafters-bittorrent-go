@@ -117,7 +117,7 @@ type Info struct {
 }
 
 type TorrentFile struct {
-	Announce string `json:"announce"`
+	Announce string `json:"Tracker URL"`
 	Info     Info   `json:"info"`
 }
 
@@ -185,7 +185,8 @@ func main() {
 			return
 		}
 
-		jsonOutput(torrentFile)
+		fmt.Println("Tracker URL:", torrentFile.Announce)
+		fmt.Println("Length:", torrentFile.Info.Length)
 	default:
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
