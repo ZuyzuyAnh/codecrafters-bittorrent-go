@@ -24,11 +24,9 @@ func (t TorrentFile) hashInfo() (string, error) {
 func (t TorrentFile) hashPieces() ([]string, error) {
 	pieces := t.Info["pieces"].([]byte)
 	res := make([]string, 0)
-	for _, piece := range pieces {
-		hasher := sha1.New()
-		hasher.Write([]byte{piece})
 
-		hashed := hasher.Sum(nil)
+	for i := 0; i < len(pieces); i += 20 {
+		hashed := pieces[i : i+20]
 		res = append(res, hex.EncodeToString(hashed))
 	}
 
