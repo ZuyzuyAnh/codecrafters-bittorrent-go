@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync"
 
 	bencode "github.com/codecrafters-io/bittorrent-starter-go/internal/bencoder"
 	decode "github.com/codecrafters-io/bittorrent-starter-go/internal/decoder"
@@ -501,77 +502,184 @@ func main() {
 			return
 		}
 
-		chosenPeer := parsedPeers[0]
+		peerPool := parsedPeers
 
-		conn, err := net.Dial("tcp", chosenPeer)
-		if err != nil {
-			fmt.Println("error connecting to peer:", err)
-			return
-		}
-		defer conn.Close()
-
-		if _, err := torrentFile.performHandShake(conn); err != nil {
-			fmt.Println("error performing handshake:", err)
-			return
-		}
-
-		// Stage 1: Receive bitfield
-		for {
-			id, _, err := receiveMessage(conn)
-			if err != nil {
-				fmt.Println("error receiving bitfield:", err)
-				return
-			}
-			if id == msgBitfield {
-				break
-			}
-		}
-
-		// Stage 2: Send interested
-		if err := sendMessage(conn, msgInterested, []byte{}); err != nil {
-			fmt.Println("error sending interested:", err)
-			return
-		}
-
-		// Stage 3: Receive unchoke
-		for {
-			id, _, err := receiveMessage(conn)
-			if err != nil {
-				fmt.Println("error waiting for unchoke:", err)
-				return
-			}
-			if id == msgUnchoke {
-				break
-			}
-		}
-
-		// Stage 4: Download pieces
-		fileBuffer := make([]byte, fileLength)
-		offset := 0
-
+		workQueue := make(chan int, numPieces)
 		for i := 0; i < numPieces; i++ {
-			var actualPieceLength int
-			if i < numPieces-1 {
-				actualPieceLength = standardPieceLength
-			} else {
-				actualPieceLength = fileLength - (numPieces-1)*standardPieceLength
-			}
-
-			pieceData, err := downloadPiece(conn, i, actualPieceLength)
-			if err != nil {
-				fmt.Println("error downloading piece:", err)
-				return
-			}
-
-			computedHash := sha1.Sum(pieceData)
-			if !bytes.Equal(computedHash[:], expectedHash[i]) {
-				fmt.Printf("piece %d hash mismatch\n", i)
-				return
-			}
-
-			copy(fileBuffer[offset:], pieceData)
-			offset += actualPieceLength
+			workQueue <- i
 		}
+
+		fileBuffer := make([]byte, fileLength)
+		var mu sync.Mutex
+
+		worker := func(id int, wg *sync.WaitGroup) {
+			defer wg.Done()
+
+			for {
+				var pieceIndex int
+
+				select {
+				case pieceIndex = <-workQueue:
+				default:
+					return
+				}
+
+				actualPieceLength := standardPieceLength
+				if pieceIndex == numPieces-1 {
+					actualPieceLength = fileLength - (numPieces-1)*standardPieceLength
+				}
+
+				success := false
+
+				for _, peer := range peerPool {
+					conn, err := net.Dial("tcp", peer)
+					if err != nil {
+						fmt.Println("error connecting to peer:", err)
+						return
+					}
+
+					// Stage 0: Handshake
+					if _, err := torrentFile.performHandShake(conn); err != nil {
+						fmt.Println("error performing handshake:", err)
+						conn.Close()
+						continue
+					}
+
+					// Stage 1: Receive bitfield
+					for {
+						id, _, err := receiveMessage(conn)
+						if err != nil {
+							fmt.Println("error receiving bitfield:", err)
+							conn.Close()
+							return
+						}
+						if id == msgBitfield {
+							break
+						}
+					}
+
+					// Stage 2: Send interested
+					if err := sendMessage(conn, msgInterested, []byte{}); err != nil {
+						fmt.Println("error sending interested:", err)
+						conn.Close()
+						continue
+					}
+
+					// Stage 3: Receive unchoke
+					for {
+						id, _, err := receiveMessage(conn)
+						if err != nil {
+							fmt.Println("error waiting for unchoke:", err)
+							conn.Close()
+							break
+						}
+						if id == msgUnchoke {
+							break
+						}
+					}
+
+					// Stage 4: Download piece
+					pieceData, err := downloadPiece(conn, pieceIndex, actualPieceLength)
+					conn.Close()
+					if err != nil {
+						fmt.Println("error downloading piece:", err)
+						continue
+					}
+
+					computedHash := sha1.Sum(pieceData)
+					if !bytes.Equal(computedHash[:], expectedHash[pieceIndex]) {
+						fmt.Printf("piece %d hash mismatch\n", pieceIndex)
+						continue
+					}
+
+					mu.Lock()
+					copy(fileBuffer[pieceIndex*standardPieceLength:], pieceData)
+					mu.Unlock()
+					success = true
+					break
+				}
+
+				if !success {
+					workQueue <- pieceIndex
+				}
+			}
+		}
+
+		var wg sync.WaitGroup
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go worker(i, &wg)
+		}
+		wg.Wait()
+
+		// conn, err := net.Dial("tcp", chosenPeer)
+		// if err != nil {
+		// 	fmt.Println("error connecting to peer:", err)
+		// 	return
+		// }
+		// defer conn.Close()
+
+		// if _, err := torrentFile.performHandShake(conn); err != nil {
+		// 	fmt.Println("error performing handshake:", err)
+		// 	return
+		// }
+
+		// // Stage 1: Receive bitfield
+		// for {
+		// 	id, _, err := receiveMessage(conn)
+		// 	if err != nil {
+		// 		fmt.Println("error receiving bitfield:", err)
+		// 		return
+		// 	}
+		// 	if id == msgBitfield {
+		// 		break
+		// 	}
+		// }
+
+		// // Stage 2: Send interested
+		// if err := sendMessage(conn, msgInterested, []byte{}); err != nil {
+		// 	fmt.Println("error sending interested:", err)
+		// 	return
+		// }
+
+		// // Stage 3: Receive unchoke
+		// for {
+		// 	id, _, err := receiveMessage(conn)
+		// 	if err != nil {
+		// 		fmt.Println("error waiting for unchoke:", err)
+		// 		return
+		// 	}
+		// 	if id == msgUnchoke {
+		// 		break
+		// 	}
+		// }
+
+		// // Stage 4: Download pieces
+		// offset := 0
+
+		// for i := 0; i < numPieces; i++ {
+		// 	var actualPieceLength int
+		// 	if i < numPieces-1 {
+		// 		actualPieceLength = standardPieceLength
+		// 	} else {
+		// 		actualPieceLength = fileLength - (numPieces-1)*standardPieceLength
+		// 	}
+
+		// 	pieceData, err := downloadPiece(conn, i, actualPieceLength)
+		// 	if err != nil {
+		// 		fmt.Println("error downloading piece:", err)
+		// 		return
+		// 	}
+
+		// 	computedHash := sha1.Sum(pieceData)
+		// 	if !bytes.Equal(computedHash[:], expectedHash[i]) {
+		// 		fmt.Printf("piece %d hash mismatch\n", i)
+		// 		return
+		// 	}
+
+		// 	copy(fileBuffer[offset:], pieceData)
+		// 	offset += actualPieceLength
+		// }
 
 		err = os.WriteFile(outputPath, fileBuffer, 0644)
 		if err != nil {
