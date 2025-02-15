@@ -180,7 +180,6 @@ func (t TorrentFile) performHandShake(conn net.Conn) (string, error) {
 		return "", err
 	}
 
-	// Kiểm tra lại protocol string nếu cần (ở đây bỏ qua)
 	peerId := response[48:68]
 	return hex.EncodeToString(peerId), nil
 }
@@ -214,24 +213,28 @@ func receiveMessage(conn net.Conn) (byte, []byte, error) {
 }
 
 func downloadPiece(conn net.Conn, pieceIndex int, pieceLength int) ([]byte, error) {
-	blockSize := 16 * 1024 // 16 KiB
+	blockSize := 16 * 1024
 	numBlocks := pieceLength / blockSize
 	if pieceLength%blockSize != 0 {
 		numBlocks++
 	}
 
 	pieceBuf := make([]byte, pieceLength)
-	// Gửi request cho từng block
+
 	for i := 0; i < numBlocks; i++ {
 		begin := i * blockSize
 		reqLen := blockSize
+
 		if begin+reqLen > pieceLength {
-			reqLen = pieceLength - begin
+			reqLen = pieceLength % (pieceLength / blockSize)
 		}
+
 		payload := make([]byte, 12)
+
 		binary.BigEndian.PutUint32(payload[:4], uint32(pieceIndex))
 		binary.BigEndian.PutUint32(payload[4:8], uint32(begin))
 		binary.BigEndian.PutUint32(payload[8:12], uint32(reqLen))
+
 		if err := sendMessage(conn, msgRequest, payload); err != nil {
 			return nil, fmt.Errorf("error sending request: %v", err)
 		}
