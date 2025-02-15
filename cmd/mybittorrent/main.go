@@ -57,6 +57,10 @@ func infoFile(file string) (TorrentFile, error) {
 		},
 	}
 
+	fmt.Println("Torrent file info:", torrentFile.Info)
+	temp, _, _ := decode.DecodeBencode(bencode.BencodeMap(torrentFile.Info))
+	fmt.Println("Torrent file info bencoded:", temp)
+
 	return torrentFile, nil
 }
 
