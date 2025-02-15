@@ -21,6 +21,20 @@ func (t TorrentFile) hashInfo() (string, error) {
 	return hex.EncodeToString(hashed), nil
 }
 
+func (t TorrentFile) hashPieces() ([]string, error) {
+	pieces := t.Info["pieces"].([]byte)
+	res := make([]string, 0)
+	for _, piece := range pieces {
+		hasher := sha1.New()
+		hasher.Write([]byte{piece})
+
+		hashed := hasher.Sum(nil)
+		res = append(res, hex.EncodeToString(hashed))
+	}
+
+	return res, nil
+}
+
 type TorrentFile struct {
 	Announce string                 `json:"Tracker URL"`
 	Info     map[string]interface{} `json:"info"`
@@ -100,6 +114,13 @@ func main() {
 		}
 
 		fmt.Println("Info Hash:", infoHash)
+		fmt.Println("Piece Length:", torrentFile.Info["piece length"])
+
+		pieces, err := torrentFile.hashPieces()
+		fmt.Println("Pieces:")
+		for _, piece := range pieces {
+			fmt.Println(piece)
+		}
 	default:
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
