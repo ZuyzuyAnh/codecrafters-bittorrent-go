@@ -6,130 +6,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
-	"unicode"
+
+	bencode "github.com/codecrafters-io/bittorrent-starter-go/internal/bencoder"
+	decode "github.com/codecrafters-io/bittorrent-starter-go/internal/decoder"
 )
 
-func decodeBenCodeString(bencodedString string) (string, int, error) {
-	var firstColonIndex int
+func (t TorrentFile) hashInfo() (string, error) {
+	bencodedInfo := bencode.BencodeMap(t.Info)
 
-	for i := 0; i < len(bencodedString); i++ {
-		if bencodedString[i] == ':' {
-			firstColonIndex = i
-			break
-		}
-	}
+	hasher := sha1.New()
 
-	lengthStr := bencodedString[:firstColonIndex]
+	hasher.Write([]byte(bencodedInfo))
 
-	length, err := strconv.Atoi(lengthStr)
-	if err != nil {
-		return "", 0, err
-	}
-	consumed := firstColonIndex + 1 + length
-	return bencodedString[firstColonIndex+1 : consumed], consumed, nil
-}
+	hashed := hasher.Sum(nil)
 
-func decodeBencodeInt(bencodedString string) (int, int, error) {
-	var closingIndex int
-	for i := 1; i < len(bencodedString); i++ {
-		if bencodedString[i] == 'e' {
-			closingIndex = i
-			break
-		}
-	}
-
-	val, err := strconv.Atoi(bencodedString[1:closingIndex])
-	return val, closingIndex + 1, err
-}
-
-func decodeBencodeList(bencodedString string) ([]interface{}, int, error) {
-	pointer := 1
-	decodedList := make([]interface{}, 0)
-
-	for pointer < len(bencodedString) {
-		if bencodedString[pointer] == 'e' {
-			pointer++
-			break
-		}
-
-		decoded, consumed, err := decodeBencode(bencodedString[pointer:])
-		if err != nil {
-			return nil, 0, err
-		}
-		decodedList = append(decodedList, decoded)
-		pointer += consumed
-	}
-
-	return decodedList, pointer, nil
-}
-
-func decodeBencodeDict(bencodedString string) (map[string]interface{}, int, error) {
-	pointer := 1
-	decodedDict := make(map[string]interface{})
-
-	for pointer < len(bencodedString) {
-		if bencodedString[pointer] == 'e' {
-			pointer++
-			break
-		}
-
-		key, consumed, err := decodeBenCodeString(bencodedString[pointer:])
-		if err != nil {
-			return nil, 0, err
-		}
-		pointer += consumed
-
-		decoded, consumed, err := decodeBencode(bencodedString[pointer:])
-		if err != nil {
-			return nil, 0, err
-		}
-		decodedDict[key] = decoded
-		pointer += consumed
-	}
-
-	return decodedDict, pointer, nil
-}
-
-func decodeBencode(bencodedString string) (interface{}, int, error) {
-	if unicode.IsDigit(rune(bencodedString[0])) {
-		return decodeBenCodeString(bencodedString)
-	}
-
-	if bencodedString[0] == 'i' && bencodedString[len(bencodedString)-1] == 'e' {
-		return decodeBencodeInt(bencodedString)
-	}
-
-	if bencodedString[0] == 'l' {
-		return decodeBencodeList(bencodedString)
-	}
-
-	if bencodedString[0] == 'd' {
-		return decodeBencodeDict(bencodedString)
-	}
-
-	return "", 0, fmt.Errorf("only strings are supported at the moment")
-}
-
-type Info struct {
-	Length      int    `json:"length"`
-	Name        string `json:"name"`
-	PieceLength int    `json:"piece length"`
-	Pieces      []byte `json:"pieces"`
-}
-
-func (i Info) Hash() (string, error) {
-	bytes, err := json.Marshal(i)
-	if err != nil {
-		return "", fmt.Errorf("error marshalling info: %w", err)
-	}
-
-	return hex.EncodeToString(sha1.New().Sum(bytes)), nil
+	return hex.EncodeToString(hashed), nil
 }
 
 type TorrentFile struct {
-	Announce string `json:"Tracker URL"`
-	Info     Info   `json:"info"`
+	Announce string                 `json:"Tracker URL"`
+	Info     map[string]interface{} `json:"info"`
 }
 
 func infoFile(file string) (TorrentFile, error) {
@@ -146,7 +42,7 @@ func infoFile(file string) (TorrentFile, error) {
 		return TorrentFile{}, err
 	}
 
-	decodedValue, _, err := decodeBencode(string(data))
+	decodedValue, _, err := decode.DecodeBencode(string(data))
 	if err != nil {
 		fmt.Println("Error decoding:", err)
 		return TorrentFile{}, err
@@ -155,11 +51,11 @@ func infoFile(file string) (TorrentFile, error) {
 	decoded := decodedValue.(map[string]interface{})
 	torrentFile := TorrentFile{
 		Announce: decoded["announce"].(string),
-		Info: Info{
-			Length:      decoded["info"].(map[string]interface{})["length"].(int),
-			Name:        decoded["info"].(map[string]interface{})["name"].(string),
-			PieceLength: decoded["info"].(map[string]interface{})["piece length"].(int),
-			Pieces:      []byte(decoded["info"].(map[string]interface{})["pieces"].(string)),
+		Info: map[string]interface{}{
+			"Length":      decoded["info"].(map[string]interface{})["length"].(int),
+			"Name":        decoded["info"].(map[string]interface{})["name"].(string),
+			"PieceLength": decoded["info"].(map[string]interface{})["piece length"].(int),
+			"Pieces":      []byte(decoded["info"].(map[string]interface{})["pieces"].(string)),
 		},
 	}
 
@@ -180,7 +76,7 @@ func main() {
 	case "decode":
 		bencodedValue := os.Args[2]
 
-		decoded, _, err := decodeBencode(bencodedValue)
+		decoded, _, err := decode.DecodeBencode(bencodedValue)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -197,9 +93,9 @@ func main() {
 		}
 
 		fmt.Println("Tracker URL:", torrentFile.Announce)
-		fmt.Println("Length:", torrentFile.Info.Length)
+		fmt.Println("Length:", torrentFile.Info["Length"])
 
-		infoHash, err := torrentFile.Info.Hash()
+		infoHash, err := torrentFile.hashInfo()
 		if err != nil {
 			fmt.Println("Error calculating info hash:", err)
 			return
