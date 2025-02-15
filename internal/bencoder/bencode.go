@@ -1,6 +1,7 @@
 package bencode
 
 import (
+	"bytes"
 	"reflect"
 	"sort"
 	"strconv"
@@ -50,7 +51,11 @@ func BencodeValue(v interface{}) string {
 	case []interface{}:
 		return BencodeList(val)
 	case []byte:
-		return BencodeString(string(val))
+		var buf bytes.Buffer
+		buf.WriteString(strconv.Itoa(len(val)))
+		buf.WriteString(":")
+		buf.Write(val)
+		return buf.String()
 	default:
 		panic("not supported type: " + reflect.TypeOf(v).String())
 	}
