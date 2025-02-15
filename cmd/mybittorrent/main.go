@@ -195,7 +195,7 @@ func (t TorrentFile) performHandShake(peerAddr string) (string, error) {
 	}
 
 	peerId := response[48:68]
-	return string(peerId), nil
+	return hex.EncodeToString(peerId), nil
 }
 
 func jsonOutput(data interface{}) {
