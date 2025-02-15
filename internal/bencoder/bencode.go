@@ -49,6 +49,8 @@ func BencodeValue(v interface{}) string {
 		return BencodeMap(val)
 	case []interface{}:
 		return BencodeList(val)
+	case []byte:
+		return BencodeString(string(val))
 	default:
 		panic("not supported type: " + reflect.TypeOf(v).String())
 	}

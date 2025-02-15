@@ -15,9 +15,7 @@ func (t TorrentFile) hashInfo() (string, error) {
 	bencodedInfo := bencode.BencodeMap(t.Info)
 
 	hasher := sha1.New()
-
 	hasher.Write([]byte(bencodedInfo))
-
 	hashed := hasher.Sum(nil)
 
 	return hex.EncodeToString(hashed), nil
