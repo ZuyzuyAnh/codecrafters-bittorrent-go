@@ -53,7 +53,7 @@ func infoFile(file string) (TorrentFile, error) {
 			"Length":      decoded["info"].(map[string]interface{})["length"].(int),
 			"Name":        decoded["info"].(map[string]interface{})["name"].(string),
 			"PieceLength": decoded["info"].(map[string]interface{})["piece length"].(int),
-			"Pieces":      decoded["info"].(map[string]interface{})["pieces"].([]byte),
+			"Pieces":      []byte(decoded["info"].(map[string]interface{})["pieces"].(string)),
 		},
 	}
 
