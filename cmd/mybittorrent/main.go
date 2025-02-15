@@ -1,12 +1,14 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -133,6 +135,11 @@ func (t TorrentFile) sendGetRequest() (string, error) {
 
 func parsePeers(peersStr string) ([]string, error) {
 	peersBytes := []byte(peersStr)
+
+	if len(peersBytes)%6 != 0 {
+		return nil, fmt.Errorf("invalid peers length: %d", len(peersBytes))
+	}
+
 	var peers []string
 	for i := 0; i < len(peersBytes); i += 6 {
 		ip := fmt.Sprintf("%d.%d.%d.%d",
@@ -145,6 +152,50 @@ func parsePeers(peersStr string) ([]string, error) {
 		peers = append(peers, fmt.Sprintf("%s:%d", ip, port))
 	}
 	return peers, nil
+}
+
+func (t TorrentFile) performHandShake(peerAddr string) (string, error) {
+	const protocol = "BitTorrent protocol"
+	const protocolLen = 19
+	reserved := make([]byte, 8)
+
+	infoHash, err := t.hashInfoByte()
+	if err != nil {
+		return "", err
+	}
+
+	peerID := make([]byte, 20)
+	_, err = rand.Read(peerID)
+	if err != nil {
+		return "", err
+	}
+
+	handshake := make([]byte, 0, 68)
+	handshake = append(handshake, byte(protocolLen))
+	handshake = append(handshake, []byte(protocol)...)
+	handshake = append(handshake, reserved...)
+	handshake = append(handshake, infoHash...)
+	handshake = append(handshake, peerID...)
+
+	conn, err := net.Dial("tcp", peerAddr)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	_, err = conn.Write(handshake)
+	if err != nil {
+		return "", err
+	}
+
+	response := make([]byte, 68)
+	_, err = io.ReadFull(conn, response)
+	if err != nil {
+		return "", err
+	}
+
+	peerId := response[48:68]
+	return string(peerId), nil
 }
 
 func jsonOutput(data interface{}) {
@@ -218,6 +269,24 @@ func main() {
 		for _, peer := range parsedPeers {
 			fmt.Println(peer)
 		}
+	case "handshake":
+		file := os.Args[2]
+		peerAddr := os.Args[3]
+
+		torrentFile, err := infoFile(file)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		peerID, err := torrentFile.performHandShake(peerAddr)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Println("Peer ID:", peerID)
+
 	default:
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
