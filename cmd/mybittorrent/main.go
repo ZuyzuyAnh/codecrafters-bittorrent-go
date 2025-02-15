@@ -50,10 +50,10 @@ func infoFile(file string) (TorrentFile, error) {
 	torrentFile := TorrentFile{
 		Announce: decoded["announce"].(string),
 		Info: map[string]interface{}{
-			"Length":      decoded["info"].(map[string]interface{})["length"].(int),
-			"Name":        decoded["info"].(map[string]interface{})["name"].(string),
-			"PieceLength": decoded["info"].(map[string]interface{})["piece length"].(int),
-			"Pieces":      []byte(decoded["info"].(map[string]interface{})["pieces"].(string)),
+			"length":       decoded["info"].(map[string]interface{})["length"].(int),
+			"name":         decoded["info"].(map[string]interface{})["name"].(string),
+			"piece length": decoded["info"].(map[string]interface{})["piece length"].(int),
+			"pieces":       []byte(decoded["info"].(map[string]interface{})["pieces"].(string)),
 		},
 	}
 
