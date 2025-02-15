@@ -199,10 +199,12 @@ func receiveMessage(conn net.Conn) (byte, []byte, error) {
 	if _, err := io.ReadFull(conn, header); err != nil {
 		return 0, nil, err
 	}
+
 	length := binary.BigEndian.Uint32(header[:4])
 	if length == 0 {
-		return 0, nil, nil // keep-alive
+		return 0, nil, nil
 	}
+
 	msg := make([]byte, length)
 	if _, err := io.ReadFull(conn, msg); err != nil {
 		return 0, nil, err
@@ -226,7 +228,7 @@ func downloadPiece(conn net.Conn, pieceIndex int, pieceLength int) ([]byte, erro
 		reqLen := blockSize
 
 		if begin+reqLen > pieceLength {
-			reqLen = pieceLength % (pieceLength / blockSize)
+			reqLen = pieceLength - begin
 		}
 
 		payload := make([]byte, 12)
@@ -247,13 +249,12 @@ func downloadPiece(conn net.Conn, pieceIndex int, pieceLength int) ([]byte, erro
 			return nil, fmt.Errorf("error receiving message: %v", err)
 		}
 		if id != msgPiece {
-			// Nếu nhận được tin nhắn không phải piece, có thể bỏ qua
 			continue
 		}
 		if len(payload) < 8 {
 			return nil, fmt.Errorf("invalid piece message length")
 		}
-		// payload: 4 byte index, 4 byte begin, phần còn lại là block data
+
 		begin := binary.BigEndian.Uint32(payload[4:8])
 		block := payload[8:]
 		copy(pieceBuf[begin:], block)
@@ -419,9 +420,23 @@ func main() {
 			}
 		}
 
-		pieceLength := torrentFile.Info["piece length"].(int)
+		standardPieceLength := torrentFile.Info["piece length"].(int)
+		fileLength := torrentFile.Info["length"].(int)
 
-		pieceData, err := downloadPiece(conn, pieceIndex, pieceLength)
+		numPieces := fileLength / standardPieceLength
+		if fileLength%standardPieceLength != 0 {
+			numPieces++
+		}
+
+		var actualPieceLength int
+		if pieceIndex == numPieces-1 {
+			actualPieceLength = fileLength - (numPieces-1)*standardPieceLength
+
+		} else {
+			actualPieceLength = standardPieceLength
+		}
+
+		pieceData, err := downloadPiece(conn, pieceIndex, actualPieceLength)
 		if err != nil {
 			fmt.Println("Error downloading piece:", err)
 			return
