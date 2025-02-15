@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/binary"
@@ -260,6 +261,7 @@ func downloadPiece(conn net.Conn, pieceIndex int, pieceLength int) ([]byte, erro
 		copy(pieceBuf[begin:], block)
 		receivedBytes += len(block)
 	}
+
 	return pieceBuf, nil
 }
 
@@ -451,6 +453,133 @@ func main() {
 			return
 		}
 		fmt.Printf("Piece %d downloaded and saved to %s\n", pieceIndex, outputPath)
+	case "download":
+		if len(os.Args) < 5 {
+			fmt.Println("Usage: download -o <torrent_file> <output_dir>")
+			return
+		}
+
+		outputPath := os.Args[3]
+		torrentPath := os.Args[4]
+
+		torrentFile, err := infoFile(torrentPath)
+		if err != nil {
+			fmt.Println("error reading torrent file:", err)
+			return
+		}
+
+		fileLength := torrentFile.Info["length"].(int)
+		standardPieceLength := torrentFile.Info["piece length"].(int)
+
+		numPieces := fileLength / standardPieceLength
+
+		if fileLength%standardPieceLength != 0 {
+			numPieces++
+		}
+
+		pieces := torrentFile.Info["pieces"].([]byte)
+		expectedHash := make([][]byte, 0, numPieces)
+
+		for i := 0; i < len(pieces); i += 20 {
+			expectedHash = append(expectedHash, pieces[i:i+20])
+		}
+
+		peersStr, err := torrentFile.sendGetRequest()
+		if err != nil {
+			fmt.Println("error getting peers:", err)
+			return
+		}
+
+		parsedPeers, err := parsePeers(peersStr)
+		if err != nil {
+			fmt.Println("error parsing peers:", err)
+			return
+		}
+
+		if len(parsedPeers) == 0 {
+			fmt.Println("no peers found")
+			return
+		}
+
+		chosenPeer := parsedPeers[0]
+
+		conn, err := net.Dial("tcp", chosenPeer)
+		if err != nil {
+			fmt.Println("error connecting to peer:", err)
+			return
+		}
+		defer conn.Close()
+
+		if _, err := torrentFile.performHandShake(conn); err != nil {
+			fmt.Println("error performing handshake:", err)
+			return
+		}
+
+		// Stage 1: Receive bitfield
+		for {
+			id, _, err := receiveMessage(conn)
+			if err != nil {
+				fmt.Println("error receiving bitfield:", err)
+				return
+			}
+			if id == msgBitfield {
+				break
+			}
+		}
+
+		// Stage 2: Send interested
+		if err := sendMessage(conn, msgInterested, []byte{}); err != nil {
+			fmt.Println("error sending interested:", err)
+			return
+		}
+
+		// Stage 3: Receive unchoke
+		for {
+			id, _, err := receiveMessage(conn)
+			if err != nil {
+				fmt.Println("error waiting for unchoke:", err)
+				return
+			}
+			if id == msgUnchoke {
+				break
+			}
+		}
+
+		// Stage 4: Download pieces
+		fileBuffer := make([]byte, fileLength)
+		offset := 0
+
+		for i := 0; i < numPieces; i++ {
+			var actualPieceLength int
+			if i < numPieces-1 {
+				actualPieceLength = standardPieceLength
+			} else {
+				actualPieceLength = fileLength - (numPieces-1)*standardPieceLength
+			}
+
+			pieceData, err := downloadPiece(conn, i, actualPieceLength)
+			if err != nil {
+				fmt.Println("error downloading piece:", err)
+				return
+			}
+
+			computedHash := sha1.Sum(pieceData)
+			if !bytes.Equal(computedHash[:], expectedHash[i]) {
+				fmt.Printf("piece %d hash mismatch\n", i)
+				return
+			}
+
+			copy(fileBuffer[offset:], pieceData)
+			offset += actualPieceLength
+		}
+
+		err = os.WriteFile(outputPath, fileBuffer, 0644)
+		if err != nil {
+			fmt.Println("error writing file to disk:", err)
+			return
+		}
+
+		fmt.Printf("file downloaded and saved to %s\n", outputPath)
 	default:
 		fmt.Println("Unknown command:", command)
 		os.Exit(1)
