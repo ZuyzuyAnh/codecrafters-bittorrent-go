@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha1"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -130,6 +131,22 @@ func (t TorrentFile) sendGetRequest() (string, error) {
 	return decoded.(map[string]interface{})["peers"].(string), nil
 }
 
+func parsePeers(peersStr string) ([]string, error) {
+	peersBytes := []byte(peersStr)
+	var peers []string
+	for i := 0; i < len(peersBytes); i += 6 {
+		ip := fmt.Sprintf("%d.%d.%d.%d",
+			peersBytes[i],
+			peersBytes[i+1],
+			peersBytes[i+2],
+			peersBytes[i+3])
+
+		port := binary.BigEndian.Uint16(peersBytes[i+4 : i+6])
+		peers = append(peers, fmt.Sprintf("%s:%d", ip, port))
+	}
+	return peers, nil
+}
+
 func jsonOutput(data interface{}) {
 	jsonOutput, _ := json.Marshal(data)
 	fmt.Println(string(jsonOutput))
@@ -192,7 +209,13 @@ func main() {
 			return
 		}
 
-		for _, peer := range peers {
+		parsedPeers, err := parsePeers(peers)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		for _, peer := range parsedPeers {
 			fmt.Println(peer)
 		}
 	default:
