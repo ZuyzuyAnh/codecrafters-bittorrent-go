@@ -91,7 +91,7 @@ func main() {
 		}
 
 		fmt.Println("Tracker URL:", torrentFile.Announce)
-		fmt.Println("Length:", torrentFile.Info["Length"])
+		fmt.Println("Length:", torrentFile.Info["length"])
 
 		infoHash, err := torrentFile.hashInfo()
 		if err != nil {
