@@ -94,7 +94,9 @@ func (t TorrentFile) buildTrackerRequest() (string, error) {
 
 	params := url.Values{}
 
-	params.Add("info_hash", string(infoHash))
+	encodedInfoHash := url.QueryEscape(string(infoHash))
+
+	params.Add("info_hash", encodedInfoHash)
 	params.Add("peer_id", "-PC0001-"+"123456789012")
 	params.Add("port", "6881")
 	params.Add("uploaded", "0")
