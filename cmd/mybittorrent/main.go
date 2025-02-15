@@ -24,6 +24,16 @@ func (t TorrentFile) hashInfo() (string, error) {
 	return hex.EncodeToString(hashed), nil
 }
 
+func (t TorrentFile) hashInfoByte() ([]byte, error) {
+	bencodedInfo := bencode.BencodeMap(t.Info)
+
+	hasher := sha1.New()
+	hasher.Write([]byte(bencodedInfo))
+	hashed := hasher.Sum(nil)
+
+	return hashed, nil
+}
+
 func (t TorrentFile) hashPieces() ([]string, error) {
 	pieces := t.Info["pieces"].([]byte)
 	res := make([]string, 0)
@@ -77,14 +87,14 @@ func infoFile(file string) (TorrentFile, error) {
 
 func (t TorrentFile) buildTrackerRequest() (string, error) {
 	trackerUrl := t.Announce
-	infoHash, err := t.hashInfo()
+	infoHash, err := t.hashInfoByte()
 	if err != nil {
 		return "", err
 	}
 
 	params := url.Values{}
 
-	params.Add("info_hash", infoHash)
+	params.Add("info_hash", string(infoHash))
 	params.Add("peer_id", "-PC0001-"+"123456789012")
 	params.Add("port", "6881")
 	params.Add("uploaded", "0")
