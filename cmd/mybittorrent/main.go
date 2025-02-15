@@ -5,6 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 
 	bencode "github.com/codecrafters-io/bittorrent-starter-go/internal/bencoder"
@@ -72,6 +75,51 @@ func infoFile(file string) (TorrentFile, error) {
 	return torrentFile, nil
 }
 
+func (t TorrentFile) buildTrackerRequest() (string, error) {
+	trackerUrl := t.Announce
+	infoHash, err := t.hashInfo()
+	if err != nil {
+		return "", err
+	}
+
+	params := url.Values{}
+
+	params.Add("info_hash", infoHash)
+	params.Add("peer_id", "-PC0001-"+"123456789012")
+	params.Add("port", "6881")
+	params.Add("uploaded", "0")
+	params.Add("downloaded", "0")
+	params.Add("left", fmt.Sprint(t.Info["length"]))
+	params.Add("compact", "1")
+
+	return trackerUrl + "?" + params.Encode(), nil
+}
+
+func (t TorrentFile) sendGetRequest() (string, error) {
+	url, err := t.buildTrackerRequest()
+	if err != nil {
+		return "", err
+	}
+
+	response, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return "", err
+	}
+
+	decoded, _, err := decode.DecodeBencode(string(body))
+	if err != nil {
+		return "", err
+	}
+
+	return decoded.(map[string]interface{})["peers"].(string), nil
+}
+
 func jsonOutput(data interface{}) {
 	jsonOutput, _ := json.Marshal(data)
 	fmt.Println(string(jsonOutput))
@@ -118,6 +166,24 @@ func main() {
 		fmt.Println("Pieces:")
 		for _, piece := range pieces {
 			fmt.Println(piece)
+		}
+	case "peers":
+		file := os.Args[2]
+
+		torrentFile, err := infoFile(file)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		peers, err := torrentFile.sendGetRequest()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		for _, peer := range peers {
+			fmt.Println(peer)
 		}
 	default:
 		fmt.Println("Unknown command: " + command)
